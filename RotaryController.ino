@@ -61,6 +61,7 @@
 #define MAX_SPEED 100
 
 #define SERIAL_BPS 9600
+#define LED_BLINK_MS 150  // ...user feedback for alternate (slow) mode on boot.
 #define BOOT_DELAY_MS 2000
 
 
@@ -109,14 +110,14 @@ void setup() {
    */
   uint32_t start_ms = millis();
   uint32_t loop_ts = start_ms;
-  uint16_t blink_ms = speed_percent < 100 ? 150 : 50;  // ...blink slower to indicate slow mode.
 
   while (loop_ts < start_ms + BOOT_DELAY_MS || !digitalRead(PIN_BUTTON_1)) {
-    digitalWrite(PIN_LED_1, HIGH);
-    delay(blink_ms);
-
-    digitalWrite(PIN_LED_1, LOW);
-    delay(blink_ms);
+    if (speed_percent < 100) {  // ...indicate alternate (slow) mode.
+      digitalWrite(PIN_LED_1, HIGH);
+      delay(LED_BLINK_MS);
+      digitalWrite(PIN_LED_1, LOW);
+      delay(LED_BLINK_MS);
+    }
 
     loop_ts = millis();
   }
