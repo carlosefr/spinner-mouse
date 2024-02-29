@@ -38,20 +38,24 @@
 // User inputs (interrupt driven)...
 #define PIN_ENCODER_1A 2  // pulse pin "A" from the rotary encoder
 #define PIN_ENCODER_1B 3  // pulse pin "B" from the rotary encoder
-#define PIN_BUTTON_1 7    // long-press on startup enables debug mode
+#define PIN_BUTTON_1 7    // long-press on startup enables slow speed mode
+#define PIN_BUTTON_2 10
+
+#define PIN_JACK_SENSE 8  // whether an external button (pedal) is present
+#define PIN_BUTTON_EXT 6  // when present, this becomes the primary button
 
 // Adjustment inputs...
 #define PIN_DIP_1 4   // enable programming mode (disables mouse)
 #define PIN_DIP_2 5   // select mouse axis (X/Y)
-#define PIN_POT_1 A0  // adjust rotation multiplier
+#define PIN_POT_1 A0  // adjust rotation multiplier (speed)
 
 // Status outputs...
-#define PIN_LED_1 9         // mouse mode (on), needs PWM.
-#define PIN_LED_BUILTIN 17  // RXLED on the Pro Micro.
+#define PIN_LED_1 9         // events enabled (mouse on), needs PWM
+#define PIN_LED_BUILTIN 17  // corresponds to RXLED on the Pro Micro
 
-#define BUILTIN_LED_INVERTED true  // LOW means ON on the Pro Micro.
+#define BUILTIN_LED_INVERTED true  // LOW means the LED is ON on the Pro Micro
 
-// Enable slow mode if the user holds down the button during startup...
+// Enable slow speed mode if the user holds down the button during startup...
 #define SLOW_MS 2000
 #define SLOW_PCT 50
 
@@ -61,7 +65,7 @@
 #define MAX_SPEED 100
 
 #define SERIAL_BPS 9600
-#define LED_BLINK_MS 150  // ...user feedback for alternate (slow) mode on boot.
+#define LED_BLINK_MS 150  // user feedback for alternate (slow) mode on boot
 #define BOOT_DELAY_MS 2000
 
 
@@ -86,6 +90,10 @@ int8_t constrain_byte(int32_t value) {
 
 void setup() {
   pinMode(PIN_BUTTON_1, INPUT_PULLUP);
+  pinMode(PIN_BUTTON_2, INPUT_PULLUP);
+
+  pinMode(PIN_JACK_SENSE, INPUT_PULLUP);
+  pinMode(PIN_BUTTON_EXT, INPUT_PULLUP);
 
   pinMode(PIN_DIP_1, INPUT_PULLUP);
   pinMode(PIN_DIP_2, INPUT_PULLUP);
@@ -93,20 +101,15 @@ void setup() {
   pinMode(PIN_LED_1, OUTPUT);
   pinMode(PIN_LED_BUILTIN, OUTPUT);
 
-  Serial.begin(SERIAL_BPS);
-
-  // Conditionally enable slow mode (useful for some games)...
+  // Conditionally enable slow speed mode (useful for some games)...
   if (!digitalRead(PIN_BUTTON_1)) {  // ...is active-low.
     delay(SLOW_MS);
     speed_percent = !digitalRead(PIN_BUTTON_1) ? SLOW_PCT : 100;
   }
 
-  spinner.write(0);
-  Mouse.begin();
-
   /*
    * Give the host some time to detect us before writing anything to the serial port, and also
-   * ensure the button is *not* pressed when we enter the main loop to avoid accidental clicks.
+   * ensure the button is no longer pressed when we enter the main loop to avoid accidental clicks.
    */
   uint32_t start_ms = millis();
   uint32_t loop_ts = start_ms;
@@ -122,94 +125,139 @@ void setup() {
     loop_ts = millis();
   }
 
-  Serial.println(F("#"));
-  Serial.println(F("# Spinner Game Controller - Carlos Rodrigues, 2024 (cefrodrigues@gmail.com)"));
-  Serial.println(F("#"));
-  Serial.println(F("# DIP SWITCH 1: mouse ON/OFF"));
-  Serial.println(F("# DIP SWITCH 2: set axis X/Y"));
-  Serial.println(F("#"));
-  Serial.print(F("# Small potentiometer adjusts the SPEED from 1 to ")); Serial.print(MAX_SPEED); Serial.println(F("."));
-  Serial.print(F("# Hold fire when connecting for SLOW MODE (")); Serial.print(SLOW_PCT); Serial.println(F("% speed)."));
-  Serial.println(F("#"));
+  Mouse.begin();
+  spinner.write(0);
 
-  Serial.println(speed_percent < 100 ? F("mode=slow") : F("mode=normal"));
+  Serial.begin(SERIAL_BPS);
+  Serial.print(F("# Spinner Game Controller "));
+  Serial.println(speed_percent < 100 ? F("(slow speed mode)") : F("(normal speed mode)"));
 }
 
 
 void loop() {
-  static uint8_t prev_enabled = 0xFF;
-  static uint8_t prev_axis = 0xFF;
+  static uint8_t prev_jack_present = 0xFF;
+  static uint8_t prev_events_enabled = 0xFF;
+  static uint8_t prev_active_axis = 0xFF;
   static uint8_t prev_speed = 0xFF;
-  static uint8_t prev_fire_pressed = 0xFF;
+  static uint8_t prev_left_pressed = 0xFF;
+  static uint8_t prev_right_pressed = 0xFF;
+  static uint8_t prev_middle_pressed = 0xFF;
 
-  uint8_t curr_enabled = digitalRead(PIN_DIP_1);
-  uint8_t curr_axis = digitalRead(PIN_DIP_2);
-  uint8_t curr_speed = map(analogRead(PIN_POT_1), 0, 1023, 1, MAX_SPEED);
-  uint8_t curr_fire_pressed = !digitalRead(PIN_BUTTON_1);
+  uint8_t jack_present = digitalRead(PIN_JACK_SENSE);  // ...is active-low, but also normally-connected.
+  uint8_t events_enabled = digitalRead(PIN_DIP_1);
+  uint8_t active_axis = digitalRead(PIN_DIP_2);
+  uint8_t speed = map(analogRead(PIN_POT_1), 0, 1023, 1, MAX_SPEED);
 
-  if (curr_enabled != prev_enabled) {
-    Serial.print("mouse=");
-    Serial.println(curr_enabled ? "on" : "off");
+  // Physical button mapping depends on the presence of an external button (pedal)...
+  uint8_t left_pressed = 0;
+  uint8_t right_pressed = 0;
+  uint8_t middle_pressed = 0;
 
-    if (curr_enabled) {
+  if (jack_present != prev_jack_present) {
+    Mouse.release(MOUSE_ALL);  // ...buttons will be reassigned.
+
+    Serial.print("jack=");
+    Serial.println(jack_present ? "connected" : "disconnected");
+
+    prev_jack_present = jack_present;
+  }
+
+  if (events_enabled != prev_events_enabled) {
+    if (events_enabled) {
       spinner.write(0);  // ...reset to a known value.
+    } else {
+      Mouse.release(MOUSE_ALL);
     }
 
     // We don't need the indicator to be super-bright...
-    analogWrite(PIN_LED_1, curr_enabled * 64);
+    analogWrite(PIN_LED_1, events_enabled * 64);
 
-    prev_enabled = curr_enabled;
+    Serial.print("events=");
+    Serial.println(events_enabled ? "on" : "off");
+
+    prev_events_enabled = events_enabled;
   }
 
-  if (curr_axis != prev_axis) {
+  if (active_axis != prev_active_axis) {
     Serial.print("axis=");
-    Serial.println(curr_axis == AXIS_X ? "x" : "y");
+    Serial.println(active_axis == AXIS_X ? "x" : "y");
 
-    prev_axis = curr_axis;
+    prev_active_axis = active_axis;
   }
 
-  if (curr_speed != prev_speed) {
+  if (speed != prev_speed) {
     Serial.print("speed=");
-    Serial.println(curr_speed);
+    Serial.println(speed);
 
-    prev_speed = curr_speed;
+    prev_speed = speed;
   }
 
-  if (curr_fire_pressed != prev_fire_pressed) {
-    // Just the LED. Only outputs to serial when the mouse is on... 
-    digitalWrite(PIN_LED_BUILTIN, BUILTIN_LED_INVERTED ? !curr_fire_pressed : curr_fire_pressed);
-    
-    prev_fire_pressed = curr_fire_pressed;
+  if (jack_present) {
+    left_pressed = !digitalRead(PIN_BUTTON_EXT);
+    right_pressed = !digitalRead(PIN_BUTTON_1);
+    middle_pressed = !digitalRead(PIN_BUTTON_2);
+  } else {
+    left_pressed = !digitalRead(PIN_BUTTON_1);
+    right_pressed = !digitalRead(PIN_BUTTON_2);
+    middle_pressed = !digitalRead(PIN_BUTTON_EXT);
   }
 
-  if (!curr_enabled) {
-    return;
+  if (left_pressed != prev_left_pressed) {
+    digitalWrite(PIN_LED_BUILTIN, BUILTIN_LED_INVERTED ? !left_pressed : left_pressed);
+    prev_left_pressed = left_pressed;
+  }
+
+  if (right_pressed != prev_right_pressed) {
+    digitalWrite(PIN_LED_BUILTIN, BUILTIN_LED_INVERTED ? !right_pressed : right_pressed);    
+    prev_right_pressed = right_pressed;
+  }
+
+  if (middle_pressed != prev_middle_pressed) {
+    digitalWrite(PIN_LED_BUILTIN, BUILTIN_LED_INVERTED ? !middle_pressed : middle_pressed);    
+    prev_middle_pressed = middle_pressed;
+  }
+
+  if (!events_enabled) {
+    return;  // ...don't send any mouse events.
   }
 
   int32_t spinner_value = spinner.read();
 
-  if (curr_fire_pressed && !Mouse.isPressed()) {
-    Mouse.press();
-    Serial.println("fire=on");
-  } else if (!curr_fire_pressed && Mouse.isPressed()) {
-    Mouse.release();
-    Serial.println("fire=off");
+  if (left_pressed && !Mouse.isPressed(MOUSE_LEFT)) {
+    Mouse.press(MOUSE_LEFT);
+    Serial.println("button(left)=on");
+  } else if (!left_pressed && Mouse.isPressed(MOUSE_LEFT)) {
+    Mouse.release(MOUSE_LEFT);
+    Serial.println("button(left)=off");
+  }
+
+  if (right_pressed && !Mouse.isPressed(MOUSE_RIGHT)) {
+    Mouse.press(MOUSE_RIGHT);
+    Serial.println("button(right)=on");
+  } else if (!right_pressed && Mouse.isPressed(MOUSE_RIGHT)) {
+    Mouse.release(MOUSE_RIGHT);
+    Serial.println("button(right)=off");
+  }
+
+  if (middle_pressed && !Mouse.isPressed(MOUSE_MIDDLE)) {
+    Mouse.press(MOUSE_MIDDLE);
+    Serial.println("button(middle)=on");
+  } else if (!middle_pressed && Mouse.isPressed(MOUSE_MIDDLE)) {
+    Mouse.release(MOUSE_MIDDLE);
+    Serial.println("button(middle)=off");
   }
 
   if (spinner_value) {
-    int8_t delta = constrain_byte(spinner_value * curr_speed * (speed_percent / 100.0));
+    int8_t delta = constrain_byte(spinner_value * speed * (speed_percent / 100.0));
 
-    Serial.print("delta(");
-    
-    if (curr_axis == AXIS_X) {
+    if (active_axis == AXIS_X) {
       Mouse.move(delta, 0, 0);
-      Serial.print("x");
+      Serial.print("delta(x)=");
     } else {
-      Mouse.move(0, -delta, 0);  // ...axis is inverted.
-      Serial.print("y");
+      Mouse.move(0, -delta, 0);  // ...vertical axis is inverted.
+      Serial.print("delta(y)=");
     }
 
-    Serial.print(")=");
     Serial.println(delta);
 
     spinner.write(0);
