@@ -1,5 +1,5 @@
 /*
- * RotaryController - Rotary controller for Arkanoid, simulating a mouse.
+ * SpinnerMouse - Spinner game controller (as a mouse) for arcade emulators.
  *
  * Copyright (c) 2024 Carlos Rodrigues <cefrodrigues@gmail.com>
  *
@@ -23,7 +23,7 @@
  */
 
 /*
- * Rotary encoder used: PEC16-4020F-N0024 (incremental, 24 pulses per 360° rotation)
+ * Rotary encoder used: PEC16-4020F-N0024 (incremental, 96 steps per turn)
  *                      https://eu.mouser.com/datasheet/2/54/pec16-245034.pdf
  *
  * Adjustment pot used: 10KΩ trimmer potentiometer (multi-turn)
@@ -35,28 +35,28 @@
 #include <Encoder.h>
 
 
-// User inputs (interrupt driven)...
-#define PIN_ENCODER_1A 2  // pulse pin "A" from the rotary encoder
-#define PIN_ENCODER_1B 3  // pulse pin "B" from the rotary encoder
-#define PIN_BUTTON_1 7    // long-press on startup enables slow mode
+// Incremental (quadrature) rotary encoder (interrupt driven)...
+#define PIN_ENCODER_1A 2  // pulse pin "A" on the encoder
+#define PIN_ENCODER_1B 3  // pulse pin "B" on the encoder
+
+// All buttons are active-low (have pull-up resistors)...
+#define PIN_BUTTON_1 7    // primary button (long-press on startup for slow mode)
 #define PIN_BUTTON_2 10
 
 #define PIN_JACK_SENSE 8  // whether an external button (pedal) is present
 #define PIN_BUTTON_EXT 6  // when present, this becomes the primary button
 
-// Adjustment inputs...
-#define PIN_DIP_1 4   // enable programming mode (disables mouse)
+#define PIN_DIP_1 4   // disables mouse events (useful for development)
 #define PIN_DIP_2 5   // select mouse axis (X/Y)
-#define PIN_POT_1 A0  // adjust rotation multiplier (speed)
+#define PIN_POT_1 A0  // rotation multiplier (speed)
 
-// Status outputs...
-#define PIN_LED_1 9         // events enabled (mouse on), needs PWM
-#define PIN_LED_BUILTIN 17  // corresponds to RXLED on the Pro Micro
+#define PIN_LED_1 9         // mouse events enabled, needs PWM (for dimming)
+#define PIN_LED_BUILTIN 17  // button state, corresponds to RXLED on the Pro Micro
 
-#define BUILTIN_LED_INVERTED true  // LOW means the LED is ON on the Pro Micro
+#define BUILTIN_LED_INVERTED true  // LOW means the LED is *ON* on the Pro Micro
 
-#define SLOW_MS 2000 // enable slow mode if the main button is held for (at least) this long on startup
-#define SLOW_PCT 0   // set to zero for maximum accuracy (https://wiki.arcadecontrols.com/?title=Spinner_Turn_Count)
+#define SLOW_TRIGGER_MS 2000  // enable slow mode if the main button is held for (at least) this long on startup
+#define SLOW_PCT 0            // 0% for maximum accuracy (https://wiki.arcadecontrols.com/?title=Spinner_Turn_Count)
 
 // The active axis is selectable using DIP switch 2 (active-low)...
 #define AXIS_X 0
@@ -64,11 +64,15 @@
 #define MAX_SPEED 50
 
 #define SERIAL_BPS 115600
-#define LED_BLINK_MS 150  // user feedback for alternate (slow) mode on boot
-#define BOOT_DELAY_MS 2000
+#define LED_BLINK_MS 150    // user feedback for alternate (slow) mode on startup
+#define BOOT_DELAY_MS 2000  // wait for button release after slow mode is triggered
+
+#define EVENT_INTERVAL_MS 4  // output mouse events at roughly 250Hz (more than enough for 60Hz games)
 
 
-// The pins are reversed because that's what's in the datasheet...
+const char* mouse_button_names[] = {"left", "right", "middle"};
+
+// The encoder pins are reversed because that's what's in the datasheet...
 Encoder spinner(PIN_ENCODER_1B, PIN_ENCODER_1A);
 uint8_t speed_percent = 100;
 
@@ -96,13 +100,13 @@ void setup() {
 
   pinMode(PIN_DIP_1, INPUT_PULLUP);
   pinMode(PIN_DIP_2, INPUT_PULLUP);
-  
+
   pinMode(PIN_LED_1, OUTPUT);
   pinMode(PIN_LED_BUILTIN, OUTPUT);
 
   // Conditionally enable slow mode...
   if (!digitalRead(PIN_BUTTON_1)) {  // ...is active-low.
-    delay(SLOW_MS);
+    delay(SLOW_TRIGGER_MS);
     speed_percent = !digitalRead(PIN_BUTTON_1) ? SLOW_PCT : 100;
   }
 
@@ -133,28 +137,27 @@ void setup() {
 
 
 void loop() {
+  uint32_t loop_start_ms = millis();
+
+  // Remember previous input states to detect changes...
   static uint8_t prev_jack_present = 0xFF;
   static uint8_t prev_events_enabled = 0xFF;
   static uint8_t prev_axis = 0xFF;
   static uint8_t prev_speed = 0xFF;
-
-  static uint8_t prev_left_pressed = 0xFF;
-  static uint8_t prev_right_pressed = 0xFF;
-  static uint8_t prev_middle_pressed = 0xFF;
+  static uint8_t prev_buttons_pressed[] = {0xFF, 0xFF, 0xFF};
 
   uint8_t jack_present = digitalRead(PIN_JACK_SENSE);  // ...active-low and normally-closed.
   uint8_t events_enabled = !digitalRead(PIN_DIP_1);
   uint8_t axis = digitalRead(PIN_DIP_2);
-
   uint8_t speed = map(analogRead(PIN_POT_1), 0, 1023, 1, MAX_SPEED);
 
   // Mouse button mapping depends on the presence of an external button (pedal)...
-  uint8_t left_pressed = 0;
-  uint8_t right_pressed = 0;
-  uint8_t middle_pressed = 0;
+  uint8_t buttons_pressed[] = {0, 0, 0};
 
-  static bool button_ext_nc = false;  // ...pedals can be normally-closed or normally-open.
+  // Pedals can be normally-closed or normally-open...
+  static bool button_ext_nc = false;
 
+  // Let the host switch between slow/normal mode at will...
   if (Serial.available() > 0) {
     switch (Serial.read() | 0x20) {  // ...as lowercase.
       case 's':
@@ -176,9 +179,10 @@ void loop() {
     }
   }
 
+  // When a jack is inserted/removed, button positions will be reassigned...
   if (jack_present != prev_jack_present) {
-    Mouse.release(MOUSE_ALL);  // ...buttons will be reassigned.
-    button_ext_nc = !digitalRead(PIN_BUTTON_EXT);
+    Mouse.release(MOUSE_ALL);
+    button_ext_nc = !digitalRead(PIN_BUTTON_EXT);  // ...support both NO and NC pedals.
 
     Serial.print("jack_");
 
@@ -192,6 +196,7 @@ void loop() {
     prev_jack_present = jack_present;
   }
 
+  // Disabling mouse events is useful while testing new code...
   if (events_enabled != prev_events_enabled) {
     if (events_enabled) {
       spinner.write(0);  // ...reset to a known value.
@@ -199,7 +204,7 @@ void loop() {
       Mouse.release(MOUSE_ALL);
     }
 
-    // We don't need the indicator to be super-bright...
+    // We don't need the indicator to be super-bright, dim it...
     analogWrite(PIN_LED_1, events_enabled * 64);
 
     Serial.print("events_");
@@ -208,6 +213,7 @@ void loop() {
     prev_events_enabled = events_enabled;
   }
 
+  // The X axis is usually what we want, but having the option to switch is nice...
   if (axis != prev_axis) {
     Serial.print("axis=");
     Serial.println(axis == AXIS_X ? "x" : "y");
@@ -215,6 +221,8 @@ void loop() {
     prev_axis = axis;
   }
 
+  // Adjusting the speed in hardware is useful for FinalBurn Neo, for example,
+  // where we cannot have the option to adjust dial sensitivity in software...
   if (speed != prev_speed) {
     Serial.print("speed=");
     Serial.print(speed);
@@ -224,58 +232,56 @@ void loop() {
     prev_speed = speed;
   }
 
+  // As mentioned above, the presence of an external button (pedal) remaps the buttons...
   if (jack_present) {
-    left_pressed = button_ext_nc ? digitalRead(PIN_BUTTON_EXT) : !digitalRead(PIN_BUTTON_EXT);
-    right_pressed = !digitalRead(PIN_BUTTON_1);
-    middle_pressed = !digitalRead(PIN_BUTTON_2);
+    buttons_pressed[0] = button_ext_nc ? digitalRead(PIN_BUTTON_EXT) : !digitalRead(PIN_BUTTON_EXT);
+    buttons_pressed[1] = !digitalRead(PIN_BUTTON_1);
+    buttons_pressed[2] = !digitalRead(PIN_BUTTON_2);
   } else {
-    left_pressed = !digitalRead(PIN_BUTTON_1);
-    right_pressed = !digitalRead(PIN_BUTTON_2);
-    middle_pressed = false;
+    buttons_pressed[0] = !digitalRead(PIN_BUTTON_1);
+    buttons_pressed[1] = !digitalRead(PIN_BUTTON_2);
+    buttons_pressed[2] = 0;
   }
 
-  if (left_pressed != prev_left_pressed) {
-    digitalWrite(PIN_LED_BUILTIN, BUILTIN_LED_INVERTED ? !left_pressed : left_pressed);
-    prev_left_pressed = left_pressed;
-  }
-
-  if (right_pressed != prev_right_pressed) {
-    digitalWrite(PIN_LED_BUILTIN, BUILTIN_LED_INVERTED ? !right_pressed : right_pressed);    
-    prev_right_pressed = right_pressed;
-  }
-
-  if (middle_pressed != prev_middle_pressed) {
-    digitalWrite(PIN_LED_BUILTIN, BUILTIN_LED_INVERTED ? !middle_pressed : middle_pressed);    
-    prev_middle_pressed = middle_pressed;
+  // Mostly for debugging, as the builtin LED won't be visible from outside the case...
+  for (uint8_t i = 0; i < 3; i++) {
+    if (buttons_pressed[i] != prev_buttons_pressed[i]) {
+      digitalWrite(PIN_LED_BUILTIN, BUILTIN_LED_INVERTED ? !buttons_pressed[i] : buttons_pressed[i]);
+      prev_buttons_pressed[i] = buttons_pressed[i];
+    }
   }
 
   if (!events_enabled) {
     return;  // ...don't send any mouse events.
   }
 
-  if (left_pressed && !Mouse.isPressed(MOUSE_LEFT)) {
-    Mouse.press(MOUSE_LEFT);
-    Serial.println("left_press");
-  } else if (!left_pressed && Mouse.isPressed(MOUSE_LEFT)) {
-    Mouse.release(MOUSE_LEFT);
-    Serial.println("left_release");
+  //
+  // Trigger mouse button events:
+  //
+
+  for (uint8_t i = 0; i < 3; i++) {
+    uint8_t mouse_button = 0x1 << i;
+
+    if (buttons_pressed[i] && !Mouse.isPressed(mouse_button)) {
+      Serial.print(mouse_button_names[i]);
+      Serial.println("_press");
+
+      Mouse.press(mouse_button);
+      continue;
+    }
+
+    if (!buttons_pressed[i] && Mouse.isPressed(mouse_button)) {
+      Serial.print(mouse_button_names[i]);
+      Serial.println("_release");
+
+      Mouse.release(mouse_button);
+      continue;
+    }
   }
 
-  if (right_pressed && !Mouse.isPressed(MOUSE_RIGHT)) {
-    Mouse.press(MOUSE_RIGHT);
-    Serial.println("right_press");
-  } else if (!right_pressed && Mouse.isPressed(MOUSE_RIGHT)) {
-    Mouse.release(MOUSE_RIGHT);
-    Serial.println("right_release");
-  }
-
-  if (middle_pressed && !Mouse.isPressed(MOUSE_MIDDLE)) {
-    Mouse.press(MOUSE_MIDDLE);
-    Serial.println("middle_press");
-  } else if (!middle_pressed && Mouse.isPressed(MOUSE_MIDDLE)) {
-    Mouse.release(MOUSE_MIDDLE);
-    Serial.println("middle_release");
-  }
+  //
+  // Trigger mouse movement events:
+  //
 
   int32_t spinner_value = spinner.read();
 
@@ -285,8 +291,8 @@ void loop() {
     if (axis == AXIS_X) {
       Mouse.move(delta, 0, 0);
     } else {
-      delta = -delta;  // ...vertical axis is inverted.
-      Mouse.move(0, -delta, 0);
+      delta = -delta;  // ...so the Y axis points upwards.
+      Mouse.move(0, delta, 0);
     }
 
     Serial.print(delta >= 0 ? "+" : "-");
@@ -294,7 +300,9 @@ void loop() {
 
     spinner.write(0);
   }
+
+  delay(EVENT_INTERVAL_MS - min(0, millis() - loop_start_ms));
 }
 
 
-/* EOF - RotaryController.ino */
+/* EOF - SpinnerMouse.ino */
