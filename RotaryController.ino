@@ -59,8 +59,8 @@
 #define SLOW_PCT 0   // set to zero for maximum accuracy (https://wiki.arcadecontrols.com/?title=Spinner_Turn_Count)
 
 // The active axis is selectable using DIP switch 2 (active-low)...
-#define AXIS_X 1
-#define AXIS_Y 0
+#define AXIS_X 0
+#define AXIS_Y 1
 #define MAX_SPEED 50
 
 #define SERIAL_BPS 115600
@@ -142,16 +142,18 @@ void loop() {
   static uint8_t prev_right_pressed = 0xFF;
   static uint8_t prev_middle_pressed = 0xFF;
 
-  uint8_t jack_present = digitalRead(PIN_JACK_SENSE);  // ...is active-low, but also normally-connected.
-  uint8_t events_enabled = digitalRead(PIN_DIP_1);
+  uint8_t jack_present = digitalRead(PIN_JACK_SENSE);  // ...active-low and normally-closed.
+  uint8_t events_enabled = !digitalRead(PIN_DIP_1);
   uint8_t axis = digitalRead(PIN_DIP_2);
 
   uint8_t speed = map(analogRead(PIN_POT_1), 0, 1023, 1, MAX_SPEED);
 
-  // Physical button mapping depends on the presence of an external button (pedal)...
+  // Mouse button mapping depends on the presence of an external button (pedal)...
   uint8_t left_pressed = 0;
   uint8_t right_pressed = 0;
   uint8_t middle_pressed = 0;
+
+  static bool button_ext_nc = false;  // ...pedals can be normally-closed or normally-open.
 
   if (Serial.available() > 0) {
     switch (Serial.read() | 0x20) {  // ...as lowercase.
@@ -176,9 +178,16 @@ void loop() {
 
   if (jack_present != prev_jack_present) {
     Mouse.release(MOUSE_ALL);  // ...buttons will be reassigned.
+    button_ext_nc = !digitalRead(PIN_BUTTON_EXT);
 
     Serial.print("jack_");
-    Serial.println(jack_present ? "connected" : "disconnected");
+
+    if (jack_present) {
+      Serial.print("connected");
+      Serial.println(button_ext_nc ? "[normally-closed]" : "[normally-open]");
+    } else {
+      Serial.println("disconnected");
+    }
 
     prev_jack_present = jack_present;
   }
@@ -216,13 +225,13 @@ void loop() {
   }
 
   if (jack_present) {
-    left_pressed = !digitalRead(PIN_BUTTON_EXT);
+    left_pressed = button_ext_nc ? digitalRead(PIN_BUTTON_EXT) : !digitalRead(PIN_BUTTON_EXT);
     right_pressed = !digitalRead(PIN_BUTTON_1);
     middle_pressed = !digitalRead(PIN_BUTTON_2);
   } else {
     left_pressed = !digitalRead(PIN_BUTTON_1);
     right_pressed = !digitalRead(PIN_BUTTON_2);
-    middle_pressed = !digitalRead(PIN_BUTTON_EXT);
+    middle_pressed = false;
   }
 
   if (left_pressed != prev_left_pressed) {
