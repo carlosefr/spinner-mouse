@@ -56,16 +56,19 @@
 #define BUILTIN_LED_INVERTED true  // LOW means the LED is *ON* on the Pro Micro
 
 #define SLOW_TRIGGER_MS 2000  // enable slow mode if the main button is held for (at least) this long on startup
-#define SLOW_PCT 0            // 0% for maximum accuracy (https://wiki.arcadecontrols.com/?title=Spinner_Turn_Count)
+#define SLOW_PCT 20           // 0% for maximum accuracy (https://wiki.arcadecontrols.com/?title=Spinner_Turn_Count)
 
 // The active axis is selectable using DIP switch 2 (active-low)...
 #define AXIS_X 0
 #define AXIS_Y 1
 #define MAX_SPEED 50
 
-#define SERIAL_BPS 115600
-#define LED_BLINK_MS 150    // user feedback for alternate (slow) mode on startup
+#define SERIAL_BPS 115200
 #define BOOT_DELAY_MS 2000  // wait for button release after slow mode is triggered
+
+#define LED_BLINK_MS 50      // external feedback for mode changes over serial
+#define LED_FEEDBACK_MS 250  // blink for how long (warning: pauses main loop)
+#define LED_INTENSITY 64     // avoid piercing retinas with blue light
 
 #define EVENT_INTERVAL_MS 4  // output mouse events at roughly 250Hz (more than enough for 60Hz games)
 
@@ -74,7 +77,9 @@ const char* mouse_button_names[] = {"left", "right", "middle"};
 
 // The encoder pins are reversed because that's what's in the datasheet...
 Encoder spinner(PIN_ENCODER_1B, PIN_ENCODER_1A);
-uint8_t speed_percent = 100;
+
+uint8_t speed_percent_default = 100;
+uint8_t speed_percent = speed_percent_default;  // ...can be changed over serial.
 
 
 // Needed because Arduino's "constrain()" chokes with negative bounds...
@@ -88,6 +93,21 @@ int8_t constrain_byte(int32_t value) {
   }
 
   return value;
+}
+
+
+// Blink the external LED for the specified amount of time...
+void blink_led_ms(uint16_t ms, bool leave_on) {
+    int32_t stop_ms = millis() + ms;
+
+    for (int32_t now = 0; now < stop_ms; now = millis()) {
+      analogWrite(PIN_LED_1, LED_INTENSITY);
+      delay(LED_BLINK_MS);
+      digitalWrite(PIN_LED_1, LOW);
+      delay(LED_BLINK_MS);
+    }
+
+    analogWrite(PIN_LED_1, leave_on * LED_INTENSITY);
 }
 
 
@@ -108,6 +128,7 @@ void setup() {
   if (!digitalRead(PIN_BUTTON_1)) {  // ...is active-low.
     delay(SLOW_TRIGGER_MS);
     speed_percent = !digitalRead(PIN_BUTTON_1) ? SLOW_PCT : 100;
+    speed_percent_default = speed_percent;  // TODO: Store this in EEPROM?
   }
 
   /*
@@ -119,7 +140,7 @@ void setup() {
 
   while (loop_ts < start_ms + BOOT_DELAY_MS || !digitalRead(PIN_BUTTON_1)) {
     if (speed_percent < 100) {  // ...indicate alternate (slow) mode.
-      digitalWrite(PIN_LED_1, HIGH);
+      analogWrite(PIN_LED_1, LED_INTENSITY);
       delay(LED_BLINK_MS);
       digitalWrite(PIN_LED_1, LOW);
       delay(LED_BLINK_MS);
@@ -160,17 +181,22 @@ void loop() {
   // Let the host switch between slow/normal mode at will...
   if (Serial.available() > 0) {
     switch (Serial.read() | 0x20) {  // ...as lowercase.
-      case 's':
+      case 's':  // (s)low speed
         speed_percent = SLOW_PCT;
+        blink_led_ms(LED_FEEDBACK_MS, events_enabled);
         Serial.println("mode=slow");
         break;
 
-      case 'n':
+      case 'n':  // (n)ormal speed
         speed_percent = 100;
+        blink_led_ms(LED_FEEDBACK_MS, events_enabled);
         Serial.println("mode=normal");
         break;
 
-      case 'i':
+      case 'r':  // (r)estore default speed
+        speed_percent = speed_percent_default;
+        blink_led_ms(LED_FEEDBACK_MS, events_enabled);
+      case 'c':  // (c)urrent speed
         Serial.println(speed_percent < 100 ? "mode=slow" : "mode=normal");
         break;
 
@@ -205,7 +231,7 @@ void loop() {
     }
 
     // We don't need the indicator to be super-bright, dim it...
-    analogWrite(PIN_LED_1, events_enabled * 64);
+    analogWrite(PIN_LED_1, events_enabled * LED_INTENSITY);
 
     Serial.print("events_");
     Serial.println(events_enabled ? "enabled" : "disabled");
