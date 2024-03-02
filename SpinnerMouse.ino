@@ -219,6 +219,7 @@ void loop() {
       Serial.println("disconnected");
     }
 
+    blink_led_ms(LED_FEEDBACK_MS, events_enabled);
     prev_jack_present = jack_present;
   }
 
