@@ -68,7 +68,7 @@
 
 #define LED_BLINK_MS 50      // external feedback for mode changes over serial
 #define LED_FEEDBACK_MS 250  // blink for how long (warning: pauses main loop)
-#define LED_INTENSITY 64     // avoid piercing retinas with blue light
+#define LED_INTENSITY 32     // avoid piercing retinas with blue light
 
 #define EVENT_INTERVAL_MS 4  // output mouse events at roughly 250Hz (more than enough for 60Hz games)
 
@@ -101,7 +101,7 @@ void blink_led_ms(uint16_t ms, bool leave_on) {
     int32_t stop_ms = millis() + ms;
 
     for (int32_t now = 0; now < stop_ms; now = millis()) {
-      analogWrite(PIN_LED_1, LED_INTENSITY);
+      digitalWrite(PIN_LED_1, HIGH);
       delay(LED_BLINK_MS);
       digitalWrite(PIN_LED_1, LOW);
       delay(LED_BLINK_MS);
