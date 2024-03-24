@@ -50,10 +50,8 @@
 #define PIN_DIP_2 5   // select mouse axis (X/Y)
 #define PIN_POT_1 A0  // rotation multiplier (speed)
 
-#define PIN_LED_1 9         // mouse events enabled, needs PWM (for dimming)
-#define PIN_LED_BUILTIN 17  // button state, corresponds to RXLED on the Pro Micro
-
-#define BUILTIN_LED_INVERTED true  // LOW means the LED is *ON* on the Pro Micro
+#define PIN_LED_1 9         // mouse events enabled indicator, needs PWM (for dimming)
+#define PIN_LED_BUILTIN 17  // button state indicator (RXLED on the Pro Micro, change to pin 13 on most other boards)
 
 #define SLOW_TRIGGER_MS 2000  // enable slow mode if the main button is held for (at least) this long on startup
 #define SLOW_PCT 20           // 0% for maximum accuracy (https://wiki.arcadecontrols.com/?title=Spinner_Turn_Count)
@@ -71,6 +69,9 @@
 #define LED_INTENSITY 32     // avoid piercing retinas with blue light
 
 #define EVENT_INTERVAL_MS 4  // output mouse events at roughly 250Hz (more than enough for 60Hz games)
+
+#define BUILTIN_LED_INVERTED true  // LOW means the LED is *ON* on the Pro Micro
+#define PEDAL_JACK_AVAILABLE true  // must be false if there's no jack built into on your specific device
 
 
 const char* mouse_button_names[] = {"left", "right", "middle"};
@@ -167,7 +168,7 @@ void loop() {
   static uint8_t prev_speed = 0xFF;
   static uint8_t prev_buttons_pressed[] = {0xFF, 0xFF, 0xFF};
 
-  uint8_t jack_present = digitalRead(PIN_JACK_SENSE);  // ...active-low and normally-closed.
+  uint8_t jack_present = PEDAL_JACK_AVAILABLE && digitalRead(PIN_JACK_SENSE);  // ...active-low and normally-closed.
   uint8_t events_enabled = !digitalRead(PIN_DIP_1);
   uint8_t axis = digitalRead(PIN_DIP_2);
   uint8_t speed = map(analogRead(PIN_POT_1), 0, 1023, 1, MAX_SPEED);
