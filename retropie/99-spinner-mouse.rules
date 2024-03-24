@@ -1,0 +1,5 @@
+#
+# /etc/udev/rules.d/99-spinner-mouse.rules
+#
+
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1b4f", ATTRS{idProduct}=="9206", GROUP="dialout", MODE="660", SYMLINK+="tty.SpinnerMouse"
