@@ -42,7 +42,9 @@ The firmware can handle the pedal being connected/disconnected at any time. It a
 
 ### Mouse Movement
 
-By default the rotary input moves the mouse pointer as fast as configured using the internal multi-turn potentiometer &ndash; from 1 to 50 steps at a time. If the primary button is kept pressed when connecting the controller, it enters "slow mode" and will always move with the maximum precision of 96 steps per turn (1 mouse step per encoder pulse). This is useful for emulators such as MAME that have their own sensitivity adjustments.
+By default the rotary input moves the mouse pointer as fast as configured using the internal multi-turn potentiometer &ndash; from 1 to 50 steps at a time. If the primary button is kept pressed when connecting the controller, it enters **slow mode** and will always move at 20% of the configured speed. This is useful for emulators such as MAME that have their own sensitivity adjustments.
+
+You may be wondering why slow mode is 20% of the configured speed and not the maximum precision of 96 steps per turn (1 mouse step per encoder pulse): it allows for better use of MAME's dial sensitivity range, which only goes up to 255%.
 
 ### Serial Port
 
@@ -57,9 +59,9 @@ See the `retropie` directory in this repo for the [runcommand scripts](https://r
 
 ### Sensitivity Settings (in Emulators)
 
-In my case I have the multi-turn potentiometer set for a speed of 22 by default, which I find confortable for Arkanoid running under [lr-fbneo](https://github.com/libretro/fbneo). I prefer to run other games under [lr-mame2003-plus](https://github.com/libretro/mame2003-plus-libretro) to be able to adjust the sensitivity (the controller must be in "slow mode" for that, see above).
+In my case I have the multi-turn potentiometer set for a speed of 22 by default, which I find confortable for Arkanoid running under [lr-fbneo](https://github.com/libretro/fbneo). I prefer to run other games under [lr-mame2003-plus](https://github.com/libretro/mame2003-plus-libretro) to be able to adjust the sensitivity (the controller must be in slow mode for best results, see above).
 
-As different games used spinners with [different resolutions](https://wiki.arcadecontrols.com/index.php/Spinner_Turn_Count), the specific sensitivity settings for each game will also be different.
+As different games used spinners with [different resolutions](https://wiki.arcadecontrols.com/index.php/Spinner_Turn_Count), the specific sensitivity settings for each game will also be different. Even games where the original spinner had a much higher resolution seem to work fine (e.g. Arkanoid's spinner had a resolution of 486 steps per turn).
 
 <img src="pictures/mame_analog_controls.png" title="MAME's analog controls menu." width="450">
 
