@@ -74,7 +74,7 @@ If you'd rather use a pedal on racing games, or play a game that needs the third
 
   * 1x [ATmega32U4 USB-C module](https://www.amazon.es/dp/B0CNR1X3YY) (5V/16MHz)
   * 1x [right-angle USB-C to USB-A cable](https://www.amazon.es/dp/B0BC8Y3BM2)
-  * 1x [incremental rotary encoder](https://mauser.pt/catalog/product_info.php?products_id=010-0452) (24 pulse / 360°, smooth rotation) + [knob](010-1271) (31x17mm)
+  * 1x [incremental rotary encoder](https://mauser.pt/catalog/product_info.php?products_id=010-0452) (24 pulse / 360°, smooth rotation) + [knob](https://mauser.pt/catalog/product_info.php?products_id=010-1271) (31x17mm)
   * 1x [arcade push-button](https://mauser.pt/catalog/product_info.php?products_id=010-1065) (32x30mm, microswitch)
   * 1x [small push-button](https://mauser.pt/catalog/product_info.php?products_id=010-0586) (12.7mm, SPST-NO)
   * 1x [miniature push-button](https://mauser.pt/catalog/product_info.php?products_id=010-1162) (6mm, SPST-NO, through-hole)
