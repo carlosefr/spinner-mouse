@@ -97,6 +97,17 @@ The miniature push-button is not needed if you choose another ATmega32U4-based m
   * 2x 100nF poliester capacitor (to debounce the pedal and jack sense switch)
 
 
+## Software Dependencies
+
+All of the following dependencies are available for installation from within the [Arduino IDE](https://www.arduino.cc/en/software):
+
+  * Paul Stoffregen's [Encoder](https://github.com/PaulStoffregen/Encoder) library
+  * Arduino's [Mouse](https://www.arduino.cc/reference/en/language/functions/usb/mouse/) library
+  * [Sparkfun AVR Boards](https://github.com/sparkfun/Arduino_Boards) support files
+
+**Caveat:** Make sure you select the proper board variant from the "Tools > Processor" menu. The board I have is 5V/16MHz and the [Sparkfun AVR Boards](https://github.com/sparkfun/Arduino_Boards) support files default to 3.3V/8MHz. This had me jump through [some hoops](https://learn.sparkfun.com/tutorials/pro-micro--fio-v3-hookup-guide/troubleshooting-and-faq#ts-revive) after an initial firmware upload under this wrong configuration.
+
+
 ## Artwork
 
 The artwork was printed with a normal inkjet printer on matte photographic paper. It looks pretty good up close and, so far, seems durable enough. The [source file](artwork/cover.pxd) is in [Pixelmator Pro](https://www.pixelmator.com/pro/) format.
