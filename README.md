@@ -105,7 +105,7 @@ All of the following dependencies are available for installation from within the
   * Arduino's [Mouse](https://www.arduino.cc/reference/en/language/functions/usb/mouse/) library
   * [Sparkfun AVR Boards](https://github.com/sparkfun/Arduino_Boards) support files
 
-**Caveat:** Make sure you select the proper board variant from the "Tools > Processor" menu. The board I have is 5V/16MHz and the [Sparkfun AVR Boards](https://github.com/sparkfun/Arduino_Boards) support files default to 3.3V/8MHz. This had me jump through [some hoops](https://learn.sparkfun.com/tutorials/pro-micro--fio-v3-hookup-guide/troubleshooting-and-faq#ts-revive) after an initial firmware upload under this wrong configuration.
+**Caveat:** Make sure you select the proper board variant from the "Tools > Processor" menu. The board I have is 5V/16MHz and the [Sparkfun AVR Boards](https://github.com/sparkfun/Arduino_Boards) support files default to 3.3V/8MHz. This had me jump through [some hoops](https://learn.sparkfun.com/tutorials/pro-micro--fio-v3-hookup-guide/troubleshooting-and-faq#ts-revive) to revive the board after an initial firmware upload under this wrong configuration.
 
 
 ## Artwork
