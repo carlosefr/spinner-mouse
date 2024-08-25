@@ -55,6 +55,7 @@
 
 #define SLOW_TRIGGER_MS 2000  // enable slow mode if the main button is held for (at least) this long on startup
 #define SLOW_PCT 20           // 0% for maximum accuracy (https://wiki.arcadecontrols.com/?title=Spinner_Turn_Count)
+#define PCT_ADJUST 5          // when moving the controller between two machines, adjusting the speed may be needed
 
 // The active axis is selectable using DIP switch 2 (active-low)...
 #define AXIS_X 0
@@ -99,7 +100,7 @@ int8_t constrain_byte(int32_t value) {
 
 // Blink the external LED for the specified amount of time...
 void blink_led_ms(uint16_t ms, bool leave_on) {
-    int32_t stop_ms = millis() + ms;
+    int32_t stop_ms = millis() + max(1, ms);
 
     for (int32_t now = 0; now < stop_ms; now = millis()) {
       digitalWrite(PIN_LED_1, HIGH);
@@ -181,7 +182,9 @@ void loop() {
 
   // Let the host switch between slow/normal mode at will...
   if (Serial.available() > 0) {
-    switch (Serial.read() | 0x20) {  // ...as lowercase.
+    char serial_cmd = Serial.read() | 0x20;  // ...as lowercase.
+
+    switch (serial_cmd) {
       case 's':  // (s)low speed
         speed_percent = SLOW_PCT;
         blink_led_ms(LED_FEEDBACK_MS, events_enabled);
@@ -198,7 +201,29 @@ void loop() {
         speed_percent = speed_percent_default;
         blink_led_ms(LED_FEEDBACK_MS, events_enabled);
       case 'c':  // (c)urrent speed
-        Serial.println(speed_percent < 100 ? "mode=slow" : "mode=normal");
+        Serial.print("mode=");
+
+        if (speed_percent == SLOW_PCT) {
+          Serial.print("slow");
+        } else if (speed_percent == 100) {
+          Serial.print("normal");
+        } else {
+          Serial.print("custom");
+        }
+
+        Serial.print("(");
+        Serial.print(speed_percent);
+        Serial.println("%)");
+        break;
+
+      case '+':  // increment speed
+      case '-':  // decrement speed
+        if (speed_percent == SLOW_PCT || speed_percent == 100) {
+          blink_led_ms(LED_FEEDBACK_MS, events_enabled);  // ...moving away from a pre-defined mode.
+        }
+
+        speed_percent = constrain(speed_percent + (serial_cmd == '+' ? 1 : -1) * PCT_ADJUST, 1, 255);
+        Serial.println(serial_cmd);
         break;
 
       default:
