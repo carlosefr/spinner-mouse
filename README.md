@@ -53,13 +53,15 @@ Besides providing some debug output when buttons are pressed and so on, it's als
   * `s` switches to slow mode;
   * `n` switches to normal mode (whatever's set through the multi-turn potentiometer);
   * `r` switches to the default mode (slow/normal depending on whether the primary button was kept pressed at connect time);
+  * `+` increases the speed by 5%;
+  * `-` decreases the speed by 5%;
   * `c` shows the current mode.
 
 See the `retropie` directory in this repo for the [runcommand scripts](https://retropie.org.uk/docs/Runcommand/#runcommand-scripts) that I'm using with [RetroPie](https://retropie.org.uk) to dynamically switch modes depending on the emulator being started.
 
 ### Sensitivity Settings (in Emulators)
 
-In my case I have the multi-turn potentiometer set for a speed of 22 by default, which I find confortable for Arkanoid running under [lr-fbneo](https://github.com/libretro/fbneo). I prefer to run other games under [lr-mame2003-plus](https://github.com/libretro/mame2003-plus-libretro) to be able to adjust the sensitivity (the controller must be in slow mode for best results, see above).
+In my case I have the multi-turn potentiometer set for a speed of 22 by default, which I find confortable for Arkanoid running under [lr-fbneo](https://github.com/libretro/fbneo) on a 1680x1050 display. I prefer to run other games under [lr-mame2003-plus](https://github.com/libretro/mame2003-plus-libretro) to be able to adjust the sensitivity (the controller must be in slow mode for best results, see above).
 
 As different games used spinners with [different resolutions](https://wiki.arcadecontrols.com/index.php/Spinner_Turn_Count), the specific sensitivity settings for each game will also be different. Even games where the original spinner had a much higher resolution seem to work fine (e.g. Arkanoid's spinner had a resolution of 486 steps per turn).
 
@@ -110,7 +112,7 @@ All of the following dependencies are available for installation from within the
 
 ## Artwork
 
-The artwork was printed with a normal inkjet printer on matte photographic paper. It looks pretty good up close and, so far, seems durable enough. The [source file](artwork/cover.pxd) is in [Pixelmator Pro](https://www.pixelmator.com/pro/) format.
+The artwork was printed with a normal inkjet printer on matte photographic paper and protected with transparent tape. It looks pretty good up close. The [source file](artwork/cover.pxd) is in [Pixelmator Pro](https://www.pixelmator.com/pro/) format.
 
 
 ## Final Words
