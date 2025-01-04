@@ -180,6 +180,10 @@ void loop() {
   // Pedals can be normally-closed or normally-open...
   static bool button_ext_nc = false;
 
+  // Some games have their main function on the secondary button and need the left/right buttons to be swapped...
+  static bool buttons_swapped = false;
+
+
   // Let the host switch between slow/normal mode at will...
   if (Serial.available() > 0) {
     char serial_cmd = Serial.read() | 0x20;  // ...as lowercase.
@@ -188,20 +192,28 @@ void loop() {
       case 's':  // (s)low speed
         speed_percent = SLOW_PCT;
         blink_led_ms(LED_FEEDBACK_MS, events_enabled);
-        Serial.println("mode=slow");
+        Serial.println("speed=slow");
         break;
 
       case 'n':  // (n)ormal speed
         speed_percent = 100;
         blink_led_ms(LED_FEEDBACK_MS, events_enabled);
-        Serial.println("mode=normal");
+        Serial.println("speed=normal");
         break;
 
-      case 'r':  // (r)estore default speed
-        speed_percent = speed_percent_default;
+      case 'w':  // s(w)ap left/right buttons
+        buttons_swapped = !buttons_swapped;
         blink_led_ms(LED_FEEDBACK_MS, events_enabled);
-      case 'c':  // (c)urrent speed
-        Serial.print("mode=");
+        Serial.print("buttons=");
+        Serial.println(buttons_swapped ? "swapped" : "normal");
+        break;
+
+      case 'r':  // (r)estore default settings
+        speed_percent = speed_percent_default;
+        buttons_swapped = false;
+        blink_led_ms(LED_FEEDBACK_MS, events_enabled);
+      case 'c':  // (c)urrent settings
+        Serial.print("speed=");
 
         if (speed_percent == SLOW_PCT) {
           Serial.print("slow");
@@ -214,6 +226,9 @@ void loop() {
         Serial.print("(");
         Serial.print(speed_percent);
         Serial.println("%)");
+
+        Serial.print("buttons=");
+        Serial.println(buttons_swapped ? "swapped" : "normal");
         break;
 
       case '+':  // increment speed
@@ -285,14 +300,26 @@ void loop() {
     prev_speed = speed;
   }
 
-  // As mentioned above, the presence of an external button (pedal) remaps the buttons...
+  // As mentioned above, the presence of an external button (pedal) remaps the buttons, and so does left/right swapping...
   if (jack_present) {
-    buttons_pressed[0] = button_ext_nc ? digitalRead(PIN_BUTTON_EXT) : !digitalRead(PIN_BUTTON_EXT);
-    buttons_pressed[1] = !digitalRead(PIN_BUTTON_1);
+    if (buttons_swapped) {
+      buttons_pressed[0] = !digitalRead(PIN_BUTTON_1);
+      buttons_pressed[1] = button_ext_nc ? digitalRead(PIN_BUTTON_EXT) : !digitalRead(PIN_BUTTON_EXT);
+    } else {
+      buttons_pressed[0] = button_ext_nc ? digitalRead(PIN_BUTTON_EXT) : !digitalRead(PIN_BUTTON_EXT);
+      buttons_pressed[1] = !digitalRead(PIN_BUTTON_1);
+    }
+
     buttons_pressed[2] = !digitalRead(PIN_BUTTON_2);
   } else {
-    buttons_pressed[0] = !digitalRead(PIN_BUTTON_1);
-    buttons_pressed[1] = !digitalRead(PIN_BUTTON_2);
+    if (buttons_swapped) {
+      buttons_pressed[0] = !digitalRead(PIN_BUTTON_2);
+      buttons_pressed[1] = !digitalRead(PIN_BUTTON_1);
+    } else {
+      buttons_pressed[0] = !digitalRead(PIN_BUTTON_1);
+      buttons_pressed[1] = !digitalRead(PIN_BUTTON_2);
+    }
+
     buttons_pressed[2] = 0;
   }
 
